@@ -364,6 +364,29 @@
             color: #444;
         }
 
+        /* Logo Styles */
+        .game-logo {
+            margin-bottom: 1.5rem;
+        }
+
+        .game-logo svg {
+            width: clamp(80px, 20vw, 120px);
+            height: auto;
+            filter: drop-shadow(0 0 10px rgba(192, 192, 192, 0.3));
+        }
+
+        .logo-text {
+            font-size: clamp(1.8rem, 8vw, 3rem);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: clamp(3px, 1vw, 6px);
+            background: linear-gradient(180deg, #e8e8e8 0%, #a0a0a0 50%, #c0c0c0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+        }
+
         /* Visual FX */
         .scanlines {
             position: fixed;
@@ -423,7 +446,41 @@
         <div id="difficultyDisplay" class="warning-box" style="color: #fff; bottom: 50%;"></div>
 
         <div id="startScreen" class="start-screen">
-            <h1>Echo Chambers</h1>
+            <div class="game-logo">
+                <!-- Bat Logo SVG -->
+                <svg viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Bat body -->
+                    <ellipse cx="50" cy="35" rx="8" ry="12" fill="#c0c0c0"/>
+                    <!-- Bat head -->
+                    <circle cx="50" cy="20" r="6" fill="#c0c0c0"/>
+                    <!-- Ears -->
+                    <path d="M 44 16 L 42 8 L 46 14 Z" fill="#c0c0c0"/>
+                    <path d="M 56 16 L 58 8 L 54 14 Z" fill="#c0c0c0"/>
+                    <!-- Left wing -->
+                    <path d="M 42 30
+                             Q 30 20, 5 25
+                             Q 10 35, 15 40
+                             Q 20 38, 25 42
+                             Q 30 40, 35 45
+                             Q 38 42, 42 45
+                             Z" fill="#c0c0c0"/>
+                    <!-- Right wing -->
+                    <path d="M 58 30
+                             Q 70 20, 95 25
+                             Q 90 35, 85 40
+                             Q 80 38, 75 42
+                             Q 70 40, 65 45
+                             Q 62 42, 58 45
+                             Z" fill="#c0c0c0"/>
+                    <!-- Eyes -->
+                    <circle cx="47" cy="19" r="1.5" fill="#000"/>
+                    <circle cx="53" cy="19" r="1.5" fill="#000"/>
+                    <!-- Sonar waves -->
+                    <path d="M 50 26 Q 40 32, 35 28" stroke="#808080" stroke-width="1" fill="none" opacity="0.5"/>
+                    <path d="M 50 26 Q 60 32, 65 28" stroke="#808080" stroke-width="1" fill="none" opacity="0.5"/>
+                </svg>
+            </div>
+            <h1 class="logo-text">Echo Chambers</h1>
             <p>Enable Audio for Best Experience</p>
             <button class="btn" id="startBtn">Initialize Sonar</button>
             <div class="tap-hint">Tap or Space to Fly</div>
@@ -1367,9 +1424,14 @@
                     document.getElementById('playerNameInput').focus();
                 } else {
                     // Submit score immediately for returning players
-                    await submitScore(playerName, finalScore);
-                    const scores = await fetchLeaderboard();
-                    renderLeaderboard(scores, finalScore);
+                    try {
+                        await submitScore(playerName, finalScore);
+                        const scores = await fetchLeaderboard();
+                        renderLeaderboard(scores, finalScore);
+                    } catch (error) {
+                        console.error('Leaderboard error:', error);
+                        renderLeaderboard([], 0);
+                    }
                     gameOverScreen.classList.remove('hidden');
                 }
             }, 400);
@@ -1388,9 +1450,15 @@
                 nameModal.classList.add('hidden');
 
                 // Submit score and show leaderboard
-                await submitScore(playerName, pendingScore);
-                const scores = await fetchLeaderboard();
-                renderLeaderboard(scores, pendingScore);
+                try {
+                    await submitScore(playerName, pendingScore);
+                    const scores = await fetchLeaderboard();
+                    renderLeaderboard(scores, pendingScore);
+                } catch (error) {
+                    console.error('Leaderboard error:', error);
+                    // Show offline message
+                    renderLeaderboard([], 0);
+                }
                 gameOverScreen.classList.remove('hidden');
             }
         }
