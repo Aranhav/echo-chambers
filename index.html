@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Echo Chambers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@800&display=swap');
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #050505;
+            overflow: hidden;
+            touch-action: none;
+            font-family: 'JetBrains Mono', monospace;
+            cursor: crosshair;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #f0f0f0;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+            z-index: 20;
+        }
+
+        .hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            opacity: 0.8;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .warning-box {
+            position: absolute;
+            bottom: 20%;
+            width: 100%;
+            text-align: center;
+            font-size: 20px;
+            color: #ff4444;
+            text-shadow: 0 0 10px #ff0000;
+            font-weight: bold;
+            letter-spacing: 2px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .warning-active {
+            opacity: 1;
+            animation: flash 0.5s infinite alternate;
+        }
+
+        @keyframes flash {
+            from { opacity: 1; }
+            to { opacity: 0.2; }
+        }
+
+        .start-screen, .game-over-screen {
+            background: rgba(10, 10, 10, 0.95);
+            padding: 2.5rem;
+            border: 2px solid #fff;
+            text-align: center;
+            pointer-events: auto;
+            box-shadow: 0 0 30px rgba(255,255,255,0.1);
+            transition: opacity 0.3s;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 6px;
+            color: #fff;
+        }
+
+        p {
+            font-size: 1rem;
+            margin-bottom: 2rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 16px 32px;
+            font-size: 1.2rem;
+            font-family: inherit;
+            font-weight: 800;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.1s;
+        }
+
+        .btn:hover {
+            background: #ddd;
+            transform: scale(1.05);
+        }
+
+        /* Visual FX */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.2) 50%,
+                rgba(0,0,0,0.2)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
+            opacity: 0.4;
+        }
+
+        .vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.9) 100%);
+            pointer-events: none;
+            z-index: 9;
+        }
+
+        .noise {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.05;
+            pointer-events: none;
+            z-index: 8;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <div class="noise"></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="ui-layer">
+        <div class="hud" id="scoreDisplay">DEPTH: 0m</div>
+        <div id="warningDisplay" class="warning-box">⚠ TERRAIN PROXIMITY ⚠</div>
+        <!-- New Difficulty Notification -->
+        <div id="difficultyDisplay" class="warning-box" style="color: #fff; bottom: 50%;"></div>
+
+        <div id="startScreen" class="start-screen">
+            <h1>Echo Chambers</h1>
+            <p>Enable Audio for Best Experience</p>
+            <button class="btn" id="startBtn">Initialize Sonar</button>
+        </div>
+
+        <div id="gameOverScreen" class="game-over-screen hidden">
+            <h1 style="color: #fff;">SIGNAL LOST</h1>
+            <p id="finalScore">Depth Reached: 0m</p>
+            <button class="btn" id="restartBtn">Reboot System</button>
+        </div>
+    </div>
+
+    <script>
+        /* * ECHO CHAMBERS - AUDIO & VISUAL UPDATE
+         * Features:
+         * - Web Audio API Synthesis
+         * - Visual Echo Bounce Physics
+         * - Improved Cave/Air Separation
+         * - Smart Auto-Pilot
+         * - Safety Net for first 50m
+         */
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        // UI Elements
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const warningDisplay = document.getElementById('warningDisplay');
+        const difficultyDisplay = document.getElementById('difficultyDisplay'); // New element
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // Game State
+        let gameState = 'START';
+        let score = 0;
+        let lastTime = 0;
+        let gameSpeed = 250;
+        let frames = 0;
+        let countdownTimer = 0;
+        let warningTimer = 0;
+        let difficultyTimer = 0; // Timer for notification
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // ------------------------------------------------------------------
+        // SOUND SYSTEM (Web Audio API)
+        // ------------------------------------------------------------------
+        class SoundSystem {
+            constructor() {
+                this.ctx = null;
+                this.initialized = false;
+            }
+
+            init() {
+                if (this.initialized) return;
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+                this.initialized = true;
+
+                // Create Ambience Drone
+                this.createAmbience();
+            }
+
+            createAmbience() {
+                if (!this.ctx) return;
+                // Pink Noise Generator for Wind
+                const bufferSize = 2 * this.ctx.sampleRate;
+                const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const output = noiseBuffer.getChannelData(0);
+
+                let lastOut = 0;
+
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    output[i] = (lastOut + (0.02 * white)) / 1.02;
+                    lastOut = output[i];
+                    output[i] *= 3.5;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = noiseBuffer;
+                noise.loop = true;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 200;
+
+                const gain = this.ctx.createGain();
+                gain.gain.value = 0.05;
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+
+            playPing() {
+                if (!this.ctx) return;
+                const t = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, t);
+                osc.frequency.exponentialRampToValueAtTime(400, t + 0.1);
+
+                gain.gain.setValueAtTime(0.3, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(t);
+                osc.stop(t + 0.3);
+            }
+
+            playBounce(volume = 1.0) {
+                if (!this.ctx) return;
+                const t = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(1200, t);
+                osc.frequency.linearRampToValueAtTime(1000, t + 0.05);
+
+                gain.gain.setValueAtTime(0.05 * volume, t);
+                gain.gain.linearRampToValueAtTime(0, t + 0.05);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(t);
+                osc.stop(t + 0.05);
+            }
+
+            playCrash() {
+                if (!this.ctx) return;
+                const t = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, t);
+                osc.frequency.exponentialRampToValueAtTime(10, t + 0.5);
+
+                gain.gain.setValueAtTime(0.5, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(t);
+                osc.stop(t + 0.5);
+            }
+
+            playWarning() {
+                if (!this.ctx) return;
+                const t = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, t);
+                osc.frequency.linearRampToValueAtTime(100, t + 0.15);
+
+                gain.gain.setValueAtTime(0.1, t);
+                gain.gain.linearRampToValueAtTime(0, t + 0.15);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(t);
+                osc.stop(t + 0.15);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // LOGIC CLASSES
+        // ------------------------------------------------------------------
+
+        class Bat {
+            constructor() {
+                this.x = canvas.width * 0.2;
+                this.y = canvas.height / 2;
+                this.velocity = 0;
+                this.gravity = 1600;
+                this.jumpStrength = -450;
+                this.angle = 0;
+                this.radius = 8;
+            }
+
+            reset() {
+                this.x = canvas.width * 0.2;
+                this.y = canvas.height / 2;
+                this.velocity = 0;
+                this.angle = 0;
+            }
+
+            update(dt) {
+                this.velocity += this.gravity * dt;
+                this.y += this.velocity * dt;
+                if (this.velocity > 800) this.velocity = 800;
+                this.angle = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, (this.velocity * 0.1) * (Math.PI / 180)));
+
+                // Collision with floor/ceiling bounds
+                if (this.y < 0 || this.y > canvas.height) return true;
+                return false;
+            }
+
+            flap() {
+                this.velocity = this.jumpStrength;
+                fxSystem.addEcho(this.x, this.y);
+                soundSystem.playPing();
+                fxSystem.addParticles(this.x, this.y, 8);
+            }
+
+            // Helper for auto-pilot to flap without user sound/particles spam
+            autoFlap() {
+                this.velocity = this.jumpStrength;
+                if(Math.random() > 0.7) fxSystem.addParticles(this.x, this.y, 3); // Fewer particles
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.moveTo(8, 0);
+                ctx.lineTo(-6, 6);
+                ctx.lineTo(-2, 0);
+                ctx.lineTo(-6, -6);
+                ctx.closePath();
+                ctx.fill();
+                // Eye
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(4, -1, 1.5, 0, Math.PI*2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class TerrainManager {
+            constructor() {
+                this.segments = [];
+                this.segmentWidth = 20;
+                this.gapSize = 280;
+                this.minGap = 150;
+                this.maxGap = 350;
+                this.noiseOffset = 0;
+                this.roughness = 60;
+
+                // Difficulty Tracking
+                this.currentStage = 0;
+
+                // --- NEW TERRAIN STATE VARIABLES ---
+                this.centerY = canvas.height / 2;
+                this.slope = 0;
+                this.terrainState = 'STABLE'; // STABLE, UP, DOWN, VOLATILE
+                this.stateTimer = 0;
+
+                this.fill();
+            }
+
+            reset() {
+                this.segments = [];
+                this.noiseOffset = 0;
+                this.gapSize = 280;
+                this.currentStage = 0;
+
+                // Reset State
+                this.centerY = canvas.height / 2;
+                this.slope = 0;
+                this.terrainState = 'STABLE';
+                this.stateTimer = 0;
+
+                this.fill();
+            }
+
+            fill() {
+                let x = 0;
+                while (x < canvas.width + 100) {
+                    this.addSegment(x);
+                    x += this.segmentWidth;
+                }
+            }
+
+            addSegment(x) {
+                // Safe Zone Logic (Start of game)
+                let difficultyScale = 0;
+                const safeZoneEnd = canvas.width * 0.4;
+                const rampUpZone = canvas.width * 0.8;
+
+                if (x > safeZoneEnd) {
+                    difficultyScale = (x - safeZoneEnd) / (rampUpZone - safeZoneEnd);
+                    difficultyScale = Math.min(1, difficultyScale);
+                }
+
+                // --- DIFFICULTY STAGE SETTINGS ---
+                let currentGap = 300;
+                let currentRoughness = 40;
+
+                if (difficultyScale >= 1) {
+                    if (score < 500) {
+                        currentGap = 280;
+                        currentRoughness = 50;
+                    } else if (score < 1000) {
+                        currentGap = 240;
+                        currentRoughness = 70;
+                    } else {
+                        currentGap = 200;
+                        currentRoughness = 90;
+                    }
+                    // Add random variation to gap
+                    currentGap += (Math.random() * 40 - 20);
+                } else {
+                    currentGap = 350; // Wide at start
+                }
+
+                // --- TERRAIN STATE MACHINE (The "Brain" of the cave) ---
+                // Only apply random states if we are past the safe zone
+                if (difficultyScale >= 0.5) {
+                    if (this.stateTimer <= 0) {
+                        // Pick a new state
+                        const rand = Math.random();
+
+                        if (rand < 0.30) {
+                            this.terrainState = 'STABLE';
+                            this.stateTimer = Math.floor(Math.random() * 30 + 20); // Lasts 20-50 segments
+                            this.slope = (Math.random() - 0.5) * 1; // Very slight drift
+                        }
+                        else if (rand < 0.55) {
+                            this.terrainState = 'UP';
+                            this.stateTimer = Math.floor(Math.random() * 25 + 15);
+                            this.slope = -(Math.random() * 3 + 2); // Sharp Up
+                        }
+                        else if (rand < 0.80) {
+                            this.terrainState = 'DOWN';
+                            this.stateTimer = Math.floor(Math.random() * 25 + 15);
+                            this.slope = (Math.random() * 3 + 2); // Sharp Down
+                        }
+                        else {
+                            this.terrainState = 'VOLATILE';
+                            this.stateTimer = Math.floor(Math.random() * 15 + 10); // Short bursts of chaos
+                            this.slope = 0;
+                        }
+                    }
+                    this.stateTimer--;
+                } else {
+                    // Force stable at start
+                    this.terrainState = 'STABLE';
+                    this.slope = 0;
+                    this.centerY = canvas.height / 2;
+                }
+
+                // --- APPLY STATE TO CENTER Y ---
+                if (this.terrainState === 'VOLATILE') {
+                    // Jitter wildly
+                    this.centerY += (Math.random() - 0.5) * 25;
+                } else {
+                    // Smooth movement based on slope
+                    this.centerY += this.slope;
+                }
+
+                // --- BOUNDARY CHECKS (Keep cave on screen) ---
+                const padding = currentGap / 2 + 60;
+
+                if (this.centerY < padding) {
+                    this.centerY = padding;
+                    this.terrainState = 'DOWN'; // Force bounce down
+                    this.slope = 2;
+                    this.stateTimer = 20;
+                }
+                if (this.centerY > canvas.height - padding) {
+                    this.centerY = canvas.height - padding;
+                    this.terrainState = 'UP'; // Force bounce up
+                    this.slope = -2;
+                    this.stateTimer = 20;
+                }
+
+                // --- GENERATE TOP AND BOTTOM POINTS ---
+                // Jaggedness increases in Volatile state
+                let jaggedMult = 1.0;
+                if (this.terrainState === 'VOLATILE') jaggedMult = 2.0;
+
+                const jaggedTop = Math.random() * currentRoughness * difficultyScale * jaggedMult;
+                const jaggedBot = Math.random() * currentRoughness * difficultyScale * jaggedMult;
+
+                const topY = this.centerY - (currentGap / 2) - jaggedTop;
+                const botY = this.centerY + (currentGap / 2) + jaggedBot;
+
+                this.segments.push({
+                    x: x,
+                    w: this.segmentWidth,
+                    top: topY,
+                    bot: botY
+                });
+            }
+
+            update(dt) {
+                const moveAmount = gameSpeed * dt;
+                if (this.segments.length > 0 && this.segments[0].x + this.segments[0].w < -100) {
+                    this.segments.shift();
+                }
+                for (let s of this.segments) {
+                    s.x -= moveAmount;
+                }
+                const lastSeg = this.segments[this.segments.length - 1];
+                if (lastSeg.x < canvas.width + 100) {
+                    this.addSegment(lastSeg.x + this.segmentWidth);
+                }
+
+                // Speed Increase based on Distance
+                // Cap speed at 800
+                let targetSpeed = 250 + (score / 10);
+                if (targetSpeed > 800) targetSpeed = 800;
+
+                // Smooth acceleration
+                gameSpeed += (targetSpeed - gameSpeed) * dt;
+            }
+
+            checkCollision(bat) {
+                const bx = bat.x;
+                const by = bat.y;
+                const br = bat.radius * 0.8;
+
+                for (let s of this.segments) {
+                    if (bx + br > s.x && bx - br < s.x + s.w) {
+                        if (by - br < s.top) return true;
+                        if (by + br > s.bot) return true;
+                    }
+                }
+                return false;
+            }
+
+            // Draw the visual outline of the cave
+            draw(ctx) {
+                ctx.strokeStyle = '#444'; // Lighter grey for better visibility
+                ctx.lineWidth = 2;
+
+                ctx.beginPath();
+                ctx.moveTo(this.segments[0].x, 0);
+                for (let s of this.segments) {
+                    ctx.lineTo(s.x, s.top);
+                    ctx.lineTo(s.x + s.w, s.top);
+                }
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(this.segments[0].x, canvas.height);
+                for (let s of this.segments) {
+                    ctx.lineTo(s.x, s.bot);
+                    ctx.lineTo(s.x + s.w, s.bot);
+                }
+                ctx.stroke();
+            }
+
+            // Draw the solid rock that covers everything
+            drawMask(ctx) {
+                ctx.fillStyle = '#000000'; // Pure Black Rocks
+
+                // Ceiling
+                ctx.beginPath();
+                ctx.moveTo(this.segments[0].x - 10, -50);
+                for (let s of this.segments) {
+                    ctx.lineTo(s.x, s.top);
+                    ctx.lineTo(s.x + s.w, s.top);
+                }
+                ctx.lineTo(this.segments[this.segments.length-1].x + 50, -50);
+                ctx.fill();
+
+                // Floor
+                ctx.beginPath();
+                ctx.moveTo(this.segments[0].x - 10, canvas.height + 50);
+                for (let s of this.segments) {
+                    ctx.lineTo(s.x, s.bot);
+                    ctx.lineTo(s.x + s.w, s.bot);
+                }
+                ctx.lineTo(this.segments[this.segments.length-1].x + 50, canvas.height + 50);
+                ctx.fill();
+            }
+
+            // Helper for Echo Bounce Physics
+            getSegmentAt(x) {
+                for(let s of this.segments) {
+                    if(x >= s.x && x < s.x + s.w) return s;
+                }
+                return null;
+            }
+        }
+
+        class FXSystem {
+            constructor() {
+                this.particles = [];
+                this.echoes = [];
+            }
+
+            addParticles(x, y, count) {
+                for (let i = 0; i < count; i++) {
+                    this.particles.push({
+                        x: x,
+                        y: y,
+                        vx: (Math.random() - 0.5) * 150,
+                        vy: (Math.random() - 0.5) * 150,
+                        life: 1.0,
+                        size: Math.random() * 2 + 1
+                    });
+                }
+            }
+
+            addEcho(x, y, isBounce = false) {
+                this.echoes.push({
+                    x: x,
+                    y: y,
+                    radius: isBounce ? 2 : 10,
+                    alpha: isBounce ? 0.6 : 1.0,
+                    maxRadius: isBounce ? 60 : 400,
+                    speed: isBounce ? 200 : 500,
+                    isBounce: isBounce,
+                    hasBouncedTop: false,
+                    hasBouncedBot: false
+                });
+            }
+
+            update(dt, terrain) {
+                // Particles
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    let p = this.particles[i];
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
+                    p.life -= dt * 3;
+                    if (p.life <= 0) this.particles.splice(i, 1);
+                }
+
+                // Echoes Logic
+                for (let i = this.echoes.length - 1; i >= 0; i--) {
+                    let e = this.echoes[i];
+                    e.radius += dt * e.speed;
+                    e.alpha -= dt * (e.isBounce ? 1.5 : 0.8);
+                    e.x -= gameSpeed * dt * 0.8;
+
+                    // --- ECHO BOUNCE LOGIC ---
+                    if (!e.isBounce && e.alpha > 0.1) {
+                        const seg = terrain.getSegmentAt(e.x);
+
+                        if (seg) {
+                            // Check Top Bounce
+                            if (!e.hasBouncedTop && (e.y - e.radius <= seg.top)) {
+                                e.hasBouncedTop = true;
+                                this.addEcho(e.x, seg.top, true); // Spawn ripple
+                                soundSystem.playBounce(e.alpha); // Play sound
+                            }
+                            // Check Bottom Bounce
+                            if (!e.hasBouncedBot && (e.y + e.radius >= seg.bot)) {
+                                e.hasBouncedBot = true;
+                                this.addEcho(e.x, seg.bot, true); // Spawn ripple
+                                soundSystem.playBounce(e.alpha); // Play sound
+                            }
+                        }
+                    }
+
+                    if (e.alpha <= 0) this.echoes.splice(i, 1);
+                }
+            }
+
+            draw(ctx) {
+                for (let e of this.echoes) {
+                    ctx.beginPath();
+                    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+
+                    const grad = ctx.createRadialGradient(e.x, e.y, Math.max(0, e.radius - 10), e.x, e.y, e.radius + 5);
+
+                    if (e.isBounce) {
+                        // Bounce ripples are cyan tinted slightly
+                        grad.addColorStop(0, `rgba(200,255,255,0)`);
+                        grad.addColorStop(0.5, `rgba(200,255,255,${e.alpha})`);
+                        grad.addColorStop(1, `rgba(200,255,255,0)`);
+                    } else {
+                        // Main sonar is white
+                        grad.addColorStop(0, `rgba(255,255,255,0)`);
+                        grad.addColorStop(0.5, `rgba(255,255,255,${e.alpha})`);
+                        grad.addColorStop(1, `rgba(255,255,255,0)`);
+                    }
+
+                    ctx.lineWidth = e.isBounce ? 5 : 20;
+                    ctx.strokeStyle = grad;
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = '#fff';
+                for (let p of this.particles) {
+                    ctx.globalAlpha = p.life;
+                    ctx.fillRect(p.x, p.y, p.size, p.size);
+                }
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // MAIN LOGIC
+        // ------------------------------------------------------------------
+
+        const bat = new Bat();
+        const terrain = new TerrainManager();
+        const fxSystem = new FXSystem();
+        const soundSystem = new SoundSystem();
+
+        function resetGame() {
+            soundSystem.init(); // Initialize audio context on interaction
+            score = 0;
+            gameSpeed = 250;
+            bat.reset();
+            terrain.reset();
+            fxSystem.particles = [];
+            fxSystem.echoes = [];
+
+            // Start Immediately
+            gameState = 'PLAYING';
+            warningTimer = 0;
+            difficultyTimer = 0; // Reset diff timer
+            difficultyDisplay.classList.remove('warning-active');
+            warningDisplay.classList.remove('warning-active');
+
+            scoreDisplay.innerText = "DEPTH: 0m";
+
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+
+            fxSystem.addEcho(bat.x, bat.y);
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            soundSystem.playCrash();
+            finalScoreDisplay.innerText = `Depth Reached: ${Math.floor(score)}m`;
+            gameOverScreen.classList.remove('hidden');
+            warningDisplay.classList.remove('warning-active');
+
+            const intensity = 10;
+            canvas.style.transform = `translate(${Math.random()*intensity-intensity/2}px, ${Math.random()*intensity-intensity/2}px)`;
+            setTimeout(() => { canvas.style.transform = 'none'; }, 100);
+
+            fxSystem.addParticles(bat.x, bat.y, 40);
+        }
+
+        function handleInput() {
+            soundSystem.init();
+            if (gameState === 'PLAYING') {
+                bat.flap();
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                if (gameState === 'PLAYING') handleInput();
+                else if (gameState !== 'PLAYING') { /* Handled by UI */ }
+            }
+        });
+
+        // ADDED: Mouse Click Listener
+        window.addEventListener('mousedown', (e) => {
+            if (gameState === 'PLAYING') handleInput();
+        });
+
+        window.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameState === 'PLAYING') handleInput();
+        }, {passive: false});
+
+        startBtn.addEventListener('click', resetGame);
+        restartBtn.addEventListener('click', resetGame);
+
+        function loop(timestamp) {
+            let dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+            if (dt > 0.05) dt = 0.05;
+
+            // 1. Background (Dark Grey Air for Separation)
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState === 'PLAYING') {
+                let oldScore = Math.floor(score);
+                score += (gameSpeed * dt) / 20;
+                let newScore = Math.floor(score);
+
+                scoreDisplay.innerText = `DEPTH: ${newScore}m`;
+
+                // Difficulty Notification Logic
+                // Check if we crossed a 500m threshold
+                if (Math.floor(oldScore / 500) < Math.floor(newScore / 500)) {
+                    difficultyDisplay.innerText = "SEISMIC ACTIVITY INCREASED";
+                    difficultyDisplay.classList.add('warning-active');
+                    difficultyTimer = 3.0;
+                    soundSystem.playWarning(); // Reuse warning sound for now
+                }
+
+                if (difficultyTimer > 0) {
+                    difficultyTimer -= dt;
+                    if (difficultyTimer <= 0) {
+                        difficultyDisplay.classList.remove('warning-active');
+                    }
+                }
+
+                // Warning Timer Update
+                if (warningTimer > 0) {
+                    warningTimer -= dt;
+                    if (warningTimer <= 0) {
+                        warningDisplay.classList.remove('warning-active');
+                    }
+                }
+
+                terrain.update(dt);
+                const crashed = bat.update(dt);
+                fxSystem.update(dt, terrain);
+
+                // Collision Logic
+                if (crashed || terrain.checkCollision(bat)) {
+                    // SAFETY NET: First 50m, if you hit floor, bounce up instead of die
+                    const isFloorHit = bat.y > canvas.height / 2; // Rough guess, good enough for safety
+
+                    if (score < 50 && isFloorHit) {
+                        // Activate Safety Net
+                        bat.velocity = -350; // Bounce
+                        bat.y = Math.min(bat.y, canvas.height - 60); // Push out of floor
+
+                        // Trigger Warning UI
+                        if (warningTimer <= 0) {
+                             soundSystem.playWarning();
+                             warningDisplay.classList.add('warning-active');
+                             warningTimer = 1.0; // Show for 1 second
+                        }
+
+                        // Visual FX
+                        fxSystem.addParticles(bat.x, bat.y + 10, 5);
+                    } else {
+                        gameOver();
+                    }
+                }
+            } else if (gameState === 'GAMEOVER') {
+                fxSystem.update(dt, terrain);
+            }
+
+            // Render Order
+            fxSystem.draw(ctx);
+            terrain.drawMask(ctx); // Solid black rocks
+            terrain.draw(ctx); // Grey outlines
+
+            if (gameState !== 'GAMEOVER') {
+                bat.draw(ctx);
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        requestAnimationFrame(loop);
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "echo-chambers",
+  "version": "1.0.0",
+  "description": "Echo Chambers - A sonar-based cave navigation game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["game", "canvas", "web-audio"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
