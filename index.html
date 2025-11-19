@@ -2,8 +2,68 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Echo Chambers</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Echo Chambers - Sonar Cave Navigation Game | Kaiross</title>
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Echo Chambers - Navigate through dark caves using sonar echolocation. A challenging arcade game with procedural terrain, Web Audio synthesis, and addictive gameplay. Made by Kaiross.">
+    <meta name="keywords" content="echo chambers, sonar game, cave game, arcade game, web game, echolocation, kaiross, browser game, mobile game">
+    <meta name="author" content="Kaiross">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://kaiross.in/echo-chambers">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://kaiross.in/echo-chambers">
+    <meta property="og:title" content="Echo Chambers - Sonar Cave Navigation Game | Kaiross">
+    <meta property="og:description" content="Navigate through dark caves using sonar echolocation. Challenging arcade gameplay with procedural terrain and immersive audio.">
+    <meta property="og:site_name" content="Kaiross">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://kaiross.in/echo-chambers">
+    <meta name="twitter:title" content="Echo Chambers - Sonar Cave Navigation Game | Kaiross">
+    <meta name="twitter:description" content="Navigate through dark caves using sonar echolocation. Challenging arcade gameplay with procedural terrain and immersive audio.">
+
+    <!-- PWA / Mobile -->
+    <meta name="theme-color" content="#050505">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Echo Chambers">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- Prevent phone number detection -->
+    <meta name="format-detection" content="telephone=no">
+
+    <!-- Structured Data for SEO -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Echo Chambers",
+        "description": "Navigate through dark caves using sonar echolocation. A challenging arcade game with procedural terrain and immersive audio.",
+        "genre": ["Arcade", "Action"],
+        "gamePlatform": ["Web Browser", "Mobile"],
+        "applicationCategory": "Game",
+        "operatingSystem": "Any",
+        "author": {
+            "@type": "Organization",
+            "name": "Kaiross",
+            "url": "https://kaiross.in"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "Kaiross",
+            "url": "https://kaiross.in"
+        },
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        }
+    }
+    </script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@800&display=swap');
@@ -44,11 +104,32 @@
 
         .hud {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            font-size: 24px;
+            top: max(20px, env(safe-area-inset-top));
+            left: max(20px, env(safe-area-inset-left));
+            font-size: clamp(16px, 4vw, 24px);
             opacity: 0.8;
             font-variant-numeric: tabular-nums;
+        }
+
+        .branding {
+            position: absolute;
+            bottom: max(20px, env(safe-area-inset-bottom));
+            right: max(20px, env(safe-area-inset-right));
+            font-size: clamp(10px, 2.5vw, 14px);
+            opacity: 0.5;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            pointer-events: auto;
+        }
+
+        .branding a {
+            color: #f0f0f0;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+
+        .branding a:hover {
+            opacity: 1;
         }
 
         .warning-box {
@@ -56,13 +137,15 @@
             bottom: 20%;
             width: 100%;
             text-align: center;
-            font-size: 20px;
+            font-size: clamp(14px, 4vw, 20px);
             color: #ff4444;
             text-shadow: 0 0 10px #ff0000;
             font-weight: bold;
             letter-spacing: 2px;
             opacity: 0;
             transition: opacity 0.2s;
+            padding: 0 20px;
+            box-sizing: border-box;
         }
 
         .warning-active {
@@ -77,12 +160,14 @@
 
         .start-screen, .game-over-screen {
             background: rgba(10, 10, 10, 0.95);
-            padding: 2.5rem;
+            padding: clamp(1.5rem, 5vw, 2.5rem);
             border: 2px solid #fff;
             text-align: center;
             pointer-events: auto;
             box-shadow: 0 0 30px rgba(255,255,255,0.1);
             transition: opacity 0.3s;
+            max-width: 90vw;
+            margin: 20px;
         }
 
         .hidden {
@@ -90,16 +175,16 @@
         }
 
         h1 {
-            font-size: 3rem;
+            font-size: clamp(1.5rem, 8vw, 3rem);
             margin-bottom: 0.5rem;
             text-transform: uppercase;
-            letter-spacing: 6px;
+            letter-spacing: clamp(3px, 1vw, 6px);
             color: #fff;
         }
 
         p {
-            font-size: 1rem;
-            margin-bottom: 2rem;
+            font-size: clamp(0.75rem, 3vw, 1rem);
+            margin-bottom: 1.5rem;
             color: #888;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -109,19 +194,42 @@
             background: #fff;
             color: #000;
             border: none;
-            padding: 16px 32px;
-            font-size: 1.2rem;
+            padding: clamp(12px, 3vw, 16px) clamp(24px, 6vw, 32px);
+            font-size: clamp(0.9rem, 3vw, 1.2rem);
             font-family: inherit;
             font-weight: 800;
             cursor: pointer;
             text-transform: uppercase;
             letter-spacing: 2px;
             transition: all 0.1s;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            min-height: 48px;
+            min-width: 48px;
         }
 
         .btn:hover {
             background: #ddd;
             transform: scale(1.05);
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+            background: #ccc;
+        }
+
+        .tap-hint {
+            font-size: clamp(0.6rem, 2.5vw, 0.8rem);
+            color: #666;
+            margin-top: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        @media (max-width: 480px) {
+            .start-screen, .game-over-screen {
+                padding: 1.25rem;
+            }
         }
 
         /* Visual FX */
@@ -177,7 +285,7 @@
 
     <div class="ui-layer">
         <div class="hud" id="scoreDisplay">DEPTH: 0m</div>
-        <div id="warningDisplay" class="warning-box">⚠ TERRAIN PROXIMITY ⚠</div>
+        <div id="warningDisplay" class="warning-box">TERRAIN PROXIMITY</div>
         <!-- New Difficulty Notification -->
         <div id="difficultyDisplay" class="warning-box" style="color: #fff; bottom: 50%;"></div>
 
@@ -185,12 +293,18 @@
             <h1>Echo Chambers</h1>
             <p>Enable Audio for Best Experience</p>
             <button class="btn" id="startBtn">Initialize Sonar</button>
+            <div class="tap-hint">Tap or Space to Fly</div>
         </div>
 
         <div id="gameOverScreen" class="game-over-screen hidden">
             <h1 style="color: #fff;">SIGNAL LOST</h1>
             <p id="finalScore">Depth Reached: 0m</p>
             <button class="btn" id="restartBtn">Reboot System</button>
+            <div class="tap-hint">Tap or Space to Fly</div>
+        </div>
+
+        <div class="branding">
+            <a href="https://kaiross.in" target="_blank" rel="noopener">Kaiross.in</a>
         </div>
     </div>
 
@@ -936,25 +1050,73 @@
             }
         }
 
+        // Detect if device supports touch
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
+                e.preventDefault();
                 if (gameState === 'PLAYING') handleInput();
-                else if (gameState !== 'PLAYING') { /* Handled by UI */ }
             }
         });
 
-        // ADDED: Mouse Click Listener
+        // Mouse Click Listener (desktop)
         window.addEventListener('mousedown', (e) => {
+            // Ignore clicks on buttons
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A') return;
             if (gameState === 'PLAYING') handleInput();
         });
 
+        // Enhanced touch controls for mobile
+        let lastTouchTime = 0;
+
         window.addEventListener('touchstart', (e) => {
+            // Prevent double-tap zoom
+            const now = Date.now();
+            if (now - lastTouchTime < 300) {
+                e.preventDefault();
+            }
+            lastTouchTime = now;
+
+            // Ignore touches on buttons
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A') return;
+
             e.preventDefault();
             if (gameState === 'PLAYING') handleInput();
         }, {passive: false});
 
+        // Prevent default touch behaviors that interfere with game
+        window.addEventListener('touchmove', (e) => {
+            if (gameState === 'PLAYING') {
+                e.preventDefault();
+            }
+        }, {passive: false});
+
+        window.addEventListener('touchend', (e) => {
+            if (gameState === 'PLAYING') {
+                e.preventDefault();
+            }
+        }, {passive: false});
+
+        // Prevent context menu on long press
+        window.addEventListener('contextmenu', (e) => {
+            if (gameState === 'PLAYING') {
+                e.preventDefault();
+            }
+        });
+
         startBtn.addEventListener('click', resetGame);
         restartBtn.addEventListener('click', resetGame);
+
+        // Also handle touch on buttons for faster response
+        startBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            resetGame();
+        });
+        restartBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            resetGame();
+        });
 
         function loop(timestamp) {
             let dt = (timestamp - lastTime) / 1000;
