@@ -132,6 +132,38 @@
             opacity: 1;
         }
 
+        .sound-toggle {
+            position: absolute;
+            top: max(20px, env(safe-area-inset-top));
+            right: max(20px, env(safe-area-inset-right));
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            font-size: 18px;
+            cursor: pointer;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .sound-toggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .sound-toggle:active {
+            transform: scale(0.9);
+        }
+
+        .sound-toggle.muted {
+            opacity: 0.5;
+        }
+
         .warning-box {
             position: absolute;
             bottom: 20%;
@@ -285,6 +317,7 @@
 
     <div class="ui-layer">
         <div class="hud" id="scoreDisplay">DEPTH: 0m</div>
+        <button class="sound-toggle" id="soundToggle" aria-label="Toggle sound">🔊</button>
         <div id="warningDisplay" class="warning-box">TERRAIN PROXIMITY</div>
         <!-- New Difficulty Notification -->
         <div id="difficultyDisplay" class="warning-box" style="color: #fff; bottom: 50%;"></div>
@@ -355,16 +388,38 @@
             constructor() {
                 this.ctx = null;
                 this.initialized = false;
+                this.muted = false;
+                this.masterGain = null;
             }
 
             init() {
                 if (this.initialized) return;
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 this.ctx = new AudioContext();
+
+                // Create master gain for mute control
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.connect(this.ctx.destination);
+
                 this.initialized = true;
 
                 // Create Ambience Drone
                 this.createAmbience();
+            }
+
+            toggleMute() {
+                this.muted = !this.muted;
+                if (this.masterGain) {
+                    this.masterGain.gain.value = this.muted ? 0 : 1;
+                }
+                return this.muted;
+            }
+
+            setMuted(muted) {
+                this.muted = muted;
+                if (this.masterGain) {
+                    this.masterGain.gain.value = this.muted ? 0 : 1;
+                }
             }
 
             createAmbience() {
@@ -396,7 +451,7 @@
 
                 noise.connect(filter);
                 filter.connect(gain);
-                gain.connect(this.ctx.destination);
+                gain.connect(this.masterGain);
                 noise.start();
             }
 
@@ -414,7 +469,7 @@
                 gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
 
                 osc.connect(gain);
-                gain.connect(this.ctx.destination);
+                gain.connect(this.masterGain);
 
                 osc.start(t);
                 osc.stop(t + 0.3);
@@ -434,7 +489,7 @@
                 gain.gain.linearRampToValueAtTime(0, t + 0.05);
 
                 osc.connect(gain);
-                gain.connect(this.ctx.destination);
+                gain.connect(this.masterGain);
 
                 osc.start(t);
                 osc.stop(t + 0.05);
@@ -454,7 +509,7 @@
                 gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
 
                 osc.connect(gain);
-                gain.connect(this.ctx.destination);
+                gain.connect(this.masterGain);
 
                 osc.start(t);
                 osc.stop(t + 0.5);
@@ -474,7 +529,7 @@
                 gain.gain.linearRampToValueAtTime(0, t + 0.15);
 
                 osc.connect(gain);
-                gain.connect(this.ctx.destination);
+                gain.connect(this.masterGain);
 
                 osc.start(t);
                 osc.stop(t + 0.15);
@@ -1116,6 +1171,24 @@
         restartBtn.addEventListener('touchend', (e) => {
             e.preventDefault();
             resetGame();
+        });
+
+        // Sound toggle
+        const soundToggle = document.getElementById('soundToggle');
+        soundToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            soundSystem.init(); // Ensure audio context exists
+            const muted = soundSystem.toggleMute();
+            soundToggle.textContent = muted ? '🔇' : '🔊';
+            soundToggle.classList.toggle('muted', muted);
+        });
+        soundToggle.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            soundSystem.init();
+            const muted = soundSystem.toggleMute();
+            soundToggle.textContent = muted ? '🔇' : '🔊';
+            soundToggle.classList.toggle('muted', muted);
         });
 
         function loop(timestamp) {
