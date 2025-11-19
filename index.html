@@ -447,37 +447,28 @@
 
         <div id="startScreen" class="start-screen">
             <div class="game-logo">
-                <!-- Bat Logo SVG -->
+                <!-- Geometric Bat Logo - Straight Lines Only -->
                 <svg viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Bat body -->
-                    <ellipse cx="50" cy="35" rx="8" ry="12" fill="#c0c0c0"/>
-                    <!-- Bat head -->
-                    <circle cx="50" cy="20" r="6" fill="#c0c0c0"/>
-                    <!-- Ears -->
-                    <path d="M 44 16 L 42 8 L 46 14 Z" fill="#c0c0c0"/>
-                    <path d="M 56 16 L 58 8 L 54 14 Z" fill="#c0c0c0"/>
-                    <!-- Left wing -->
-                    <path d="M 42 30
-                             Q 30 20, 5 25
-                             Q 10 35, 15 40
-                             Q 20 38, 25 42
-                             Q 30 40, 35 45
-                             Q 38 42, 42 45
-                             Z" fill="#c0c0c0"/>
-                    <!-- Right wing -->
-                    <path d="M 58 30
-                             Q 70 20, 95 25
-                             Q 90 35, 85 40
-                             Q 80 38, 75 42
-                             Q 70 40, 65 45
-                             Q 62 42, 58 45
-                             Z" fill="#c0c0c0"/>
-                    <!-- Eyes -->
-                    <circle cx="47" cy="19" r="1.5" fill="#000"/>
-                    <circle cx="53" cy="19" r="1.5" fill="#000"/>
-                    <!-- Sonar waves -->
-                    <path d="M 50 26 Q 40 32, 35 28" stroke="#808080" stroke-width="1" fill="none" opacity="0.5"/>
-                    <path d="M 50 26 Q 60 32, 65 28" stroke="#808080" stroke-width="1" fill="none" opacity="0.5"/>
+                    <!-- Left wing - angular geometric shape -->
+                    <polygon points="42,28 35,22 20,18 5,22 8,32 12,38 18,36 22,42 28,38 32,44 38,40 42,46" fill="#c0c0c0"/>
+                    <!-- Right wing - angular geometric shape -->
+                    <polygon points="58,28 65,22 80,18 95,22 92,32 88,38 82,36 78,42 72,38 68,44 62,40 58,46" fill="#c0c0c0"/>
+                    <!-- Body - hexagon -->
+                    <polygon points="50,24 56,30 56,42 50,48 44,42 44,30" fill="#c0c0c0"/>
+                    <!-- Head - pentagon -->
+                    <polygon points="50,14 56,18 54,24 46,24 44,18" fill="#c0c0c0"/>
+                    <!-- Left ear - triangle -->
+                    <polygon points="44,16 40,6 46,12" fill="#c0c0c0"/>
+                    <!-- Right ear - triangle -->
+                    <polygon points="56,16 60,6 54,12" fill="#c0c0c0"/>
+                    <!-- Eyes - small diamonds -->
+                    <polygon points="47,18 48,17 49,18 48,19" fill="#000"/>
+                    <polygon points="51,18 52,17 53,18 52,19" fill="#000"/>
+                    <!-- Sonar waves - angular lines -->
+                    <path d="M 50,26 L 45,30 L 40,28" stroke="#808080" stroke-width="1" fill="none" opacity="0.6"/>
+                    <path d="M 50,26 L 55,30 L 60,28" stroke="#808080" stroke-width="1" fill="none" opacity="0.6"/>
+                    <path d="M 50,26 L 42,32 L 35,29" stroke="#808080" stroke-width="1" fill="none" opacity="0.3"/>
+                    <path d="M 50,26 L 58,32 L 65,29" stroke="#808080" stroke-width="1" fill="none" opacity="0.3"/>
                 </svg>
             </div>
             <h1 class="logo-text">Echo Chambers</h1>
@@ -1437,38 +1428,73 @@
             }, 400);
         }
 
-        // Name modal handling
+        // Name modal handling - wait for DOM
         const nameModal = document.getElementById('nameModal');
         const playerNameInput = document.getElementById('playerNameInput');
         const submitNameBtn = document.getElementById('submitNameBtn');
 
         async function handleNameSubmit() {
-            const name = playerNameInput.value.trim().toUpperCase();
+            const nameInput = document.getElementById('playerNameInput');
+            const name = nameInput.value.trim().toUpperCase();
+
+            console.log('handleNameSubmit called, name:', name);
+
             if (name.length > 0) {
                 playerName = name;
                 localStorage.setItem('echoChambersName', playerName);
-                nameModal.classList.add('hidden');
+
+                console.log('Submitting score:', pendingScore, 'for player:', playerName);
+
+                // Hide modal first
+                document.getElementById('nameModal').classList.add('hidden');
 
                 // Submit score and show leaderboard
                 try {
-                    await submitScore(playerName, pendingScore);
+                    const result = await submitScore(playerName, pendingScore);
+                    console.log('Score submitted:', result);
                     const scores = await fetchLeaderboard();
+                    console.log('Leaderboard fetched:', scores);
                     renderLeaderboard(scores, pendingScore);
                 } catch (error) {
                     console.error('Leaderboard error:', error);
-                    // Show offline message
                     renderLeaderboard([], 0);
                 }
                 gameOverScreen.classList.remove('hidden');
+            } else {
+                console.log('Name is empty, not submitting');
             }
         }
 
-        submitNameBtn.addEventListener('click', handleNameSubmit);
-        playerNameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
+        // Attach event listeners
+        if (submitNameBtn) {
+            submitNameBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Submit button clicked');
                 handleNameSubmit();
-            }
-        });
+            });
+
+            submitNameBtn.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Submit button touched');
+                handleNameSubmit();
+            });
+        } else {
+            console.error('submitNameBtn not found!');
+        }
+
+        if (playerNameInput) {
+            playerNameInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    console.log('Enter pressed in name input');
+                    handleNameSubmit();
+                }
+            });
+        } else {
+            console.error('playerNameInput not found!');
+        }
 
         function handleInput() {
             soundSystem.init();
