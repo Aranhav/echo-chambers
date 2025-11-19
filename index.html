@@ -374,6 +374,19 @@
         let warningTimer = 0;
         let difficultyTimer = 0; // Timer for notification
 
+        // Gameplay Enhancement State
+        let scoreMultiplier = 1.0;
+        let lastMilestone = 0;
+        let milestoneTimer = 0;
+        let personalBest = parseInt(localStorage.getItem('echoChambersBest') || '0');
+        let nearMissTimer = 0;
+        let deathSlowMo = false;
+        let deathSlowMoTimer = 0;
+        let baseSpeed = 280;
+        let speedPhase = 0; // For speed variation
+        let comboStreak = 0; // Near-wall flying streak
+        let lastProximity = 0;
+
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -533,6 +546,56 @@
 
                 osc.start(t);
                 osc.stop(t + 0.15);
+            }
+
+            playMilestone() {
+                if (!this.ctx) return;
+                const t = this.ctx.currentTime;
+
+                // Triumphant rising tone
+                const osc1 = this.ctx.createOscillator();
+                const osc2 = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc1.type = 'sine';
+                osc2.type = 'sine';
+
+                osc1.frequency.setValueAtTime(400, t);
+                osc1.frequency.linearRampToValueAtTime(800, t + 0.15);
+                osc2.frequency.setValueAtTime(600, t);
+                osc2.frequency.linearRampToValueAtTime(1200, t + 0.15);
+
+                gain.gain.setValueAtTime(0.2, t);
+                gain.gain.linearRampToValueAtTime(0, t + 0.3);
+
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(this.masterGain);
+
+                osc1.start(t);
+                osc2.start(t);
+                osc1.stop(t + 0.3);
+                osc2.stop(t + 0.3);
+            }
+
+            playNearMiss() {
+                if (!this.ctx) return;
+                const t = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, t);
+                osc.frequency.linearRampToValueAtTime(400, t + 0.08);
+
+                gain.gain.setValueAtTime(0.15, t);
+                gain.gain.linearRampToValueAtTime(0, t + 0.08);
+
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+
+                osc.start(t);
+                osc.stop(t + 0.08);
             }
         }
 
@@ -816,14 +879,7 @@
                 if (lastSeg.x < canvas.width + 100) {
                     this.addSegment(lastSeg.x + this.segmentWidth);
                 }
-
-                // Speed Increase based on Distance (FASTER)
-                // Cap speed at 900
-                let targetSpeed = 280 + (score / 6);
-                if (targetSpeed > 900) targetSpeed = 900;
-
-                // Smooth acceleration
-                gameSpeed += (targetSpeed - gameSpeed) * dt * 1.5;
+                // Speed is now managed in main loop with variation
             }
 
             checkCollision(bat) {
@@ -1069,6 +1125,18 @@
             fxSystem.particles = [];
             fxSystem.echoes = [];
 
+            // Reset gameplay enhancement state
+            scoreMultiplier = 1.0;
+            lastMilestone = 0;
+            milestoneTimer = 0;
+            nearMissTimer = 0;
+            deathSlowMo = false;
+            deathSlowMoTimer = 0;
+            baseSpeed = 280;
+            speedPhase = 0;
+            comboStreak = 0;
+            lastProximity = 0;
+
             // Start Immediately
             gameState = 'PLAYING';
             warningTimer = 0;
@@ -1085,17 +1153,39 @@
         }
 
         function gameOver() {
+            // Save personal best
+            const finalScore = Math.floor(score);
+            if (finalScore > personalBest) {
+                personalBest = finalScore;
+                localStorage.setItem('echoChambersBest', personalBest.toString());
+            }
+
+            // Start death slow-mo
+            deathSlowMo = true;
+            deathSlowMoTimer = 0.4; // 0.4 seconds of slow-mo
+
             gameState = 'GAMEOVER';
             soundSystem.playCrash();
-            finalScoreDisplay.innerText = `Depth Reached: ${Math.floor(score)}m`;
-            gameOverScreen.classList.remove('hidden');
+
+            // Show score with personal best
+            if (finalScore >= personalBest && finalScore > 0) {
+                finalScoreDisplay.innerHTML = `Depth: ${finalScore}m<br><span style="color: #4f4; font-size: 0.8em;">NEW BEST!</span>`;
+            } else {
+                finalScoreDisplay.innerHTML = `Depth: ${finalScore}m<br><span style="color: #888; font-size: 0.7em;">Best: ${personalBest}m</span>`;
+            }
+
+            // Delay showing game over screen for slow-mo effect
+            setTimeout(() => {
+                gameOverScreen.classList.remove('hidden');
+            }, 400);
+
             warningDisplay.classList.remove('warning-active');
 
-            const intensity = 10;
+            const intensity = 15;
             canvas.style.transform = `translate(${Math.random()*intensity-intensity/2}px, ${Math.random()*intensity-intensity/2}px)`;
             setTimeout(() => { canvas.style.transform = 'none'; }, 100);
 
-            fxSystem.addParticles(bat.x, bat.y, 40);
+            fxSystem.addParticles(bat.x, bat.y, 50);
         }
 
         function handleInput() {
@@ -1196,24 +1286,106 @@
             lastTime = timestamp;
             if (dt > 0.05) dt = 0.05;
 
+            // Apply death slow-mo
+            if (deathSlowMo) {
+                dt *= 0.15; // 15% speed during death
+                deathSlowMoTimer -= (timestamp - lastTime) / 1000 * 0.15;
+                if (deathSlowMoTimer <= 0) {
+                    deathSlowMo = false;
+                }
+            }
+
             // 1. Background (Dark Grey Air for Separation)
             ctx.fillStyle = '#111';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            if (gameState === 'PLAYING') {
+            if (gameState === 'PLAYING' || deathSlowMo) {
+                // --- PROXIMITY SCORE MULTIPLIER ---
+                const seg = terrain.getSegmentAt(bat.x);
+                let proximityBonus = 1.0;
+                if (seg) {
+                    const distToTop = bat.y - seg.top;
+                    const distToBot = seg.bot - bat.y;
+                    const minDist = Math.min(distToTop, distToBot);
+                    const gapSize = seg.bot - seg.top;
+
+                    // Calculate proximity bonus (closer to wall = higher multiplier)
+                    if (minDist < gapSize * 0.2) {
+                        proximityBonus = 2.5; // Very close: 2.5x
+                        comboStreak += dt;
+                    } else if (minDist < gapSize * 0.35) {
+                        proximityBonus = 1.5; // Close: 1.5x
+                        comboStreak += dt * 0.5;
+                    } else {
+                        comboStreak = Math.max(0, comboStreak - dt * 2);
+                    }
+
+                    // Near-miss detection (very close but not dead)
+                    if (minDist < 25 && minDist > 5) {
+                        if (nearMissTimer <= 0) {
+                            soundSystem.playNearMiss();
+                            nearMissTimer = 0.3;
+                            // Screen shake
+                            const shakeIntensity = 3;
+                            canvas.style.transform = `translate(${(Math.random()-0.5)*shakeIntensity}px, ${(Math.random()-0.5)*shakeIntensity}px)`;
+                            setTimeout(() => { canvas.style.transform = 'none'; }, 50);
+                        }
+                    }
+                }
+
+                // --- SPEED VARIATION (Rest sections) ---
+                speedPhase += dt * 0.3;
+                const speedVariation = Math.sin(speedPhase) * 0.15; // ±15% speed waves
+                const targetBaseSpeed = 280 + (score / 6);
+                if (targetBaseSpeed > 900) baseSpeed = 900;
+                else baseSpeed += (targetBaseSpeed - baseSpeed) * dt * 1.5;
+
+                gameSpeed = baseSpeed * (1 + speedVariation);
+
+                // --- SCORE CALCULATION ---
                 let oldScore = Math.floor(score);
-                score += (gameSpeed * dt) / 20;
+                score += (gameSpeed * dt * proximityBonus) / 20;
                 let newScore = Math.floor(score);
 
-                scoreDisplay.innerText = `DEPTH: ${newScore}m`;
+                // Update display with multiplier indicator
+                if (proximityBonus > 1) {
+                    scoreDisplay.innerHTML = `DEPTH: ${newScore}m <span style="color: #4f4; font-size: 0.7em;">x${proximityBonus.toFixed(1)}</span>`;
+                } else {
+                    scoreDisplay.innerText = `DEPTH: ${newScore}m`;
+                }
 
-                // Difficulty Notification Logic
-                // Check if we crossed a 500m threshold
-                if (Math.floor(oldScore / 500) < Math.floor(newScore / 500)) {
+                // --- MILESTONE CELEBRATIONS (every 100m) ---
+                const currentMilestone = Math.floor(newScore / 100);
+                if (currentMilestone > lastMilestone && newScore > 0) {
+                    lastMilestone = currentMilestone;
+                    soundSystem.playMilestone();
+                    milestoneTimer = 1.5;
+
+                    // Flash effect
+                    difficultyDisplay.innerText = `${currentMilestone * 100}m`;
+                    difficultyDisplay.style.color = '#4f4';
+                    difficultyDisplay.classList.add('warning-active');
+
+                    // Burst of particles
+                    fxSystem.addParticles(bat.x, bat.y, 15);
+                }
+
+                // Milestone display timer
+                if (milestoneTimer > 0) {
+                    milestoneTimer -= dt;
+                    if (milestoneTimer <= 0) {
+                        difficultyDisplay.classList.remove('warning-active');
+                        difficultyDisplay.style.color = '#fff';
+                    }
+                }
+
+                // Difficulty Notification Logic (500m intervals)
+                if (Math.floor(oldScore / 500) < Math.floor(newScore / 500) && newScore >= 500) {
                     difficultyDisplay.innerText = "SEISMIC ACTIVITY INCREASED";
+                    difficultyDisplay.style.color = '#ff4444';
                     difficultyDisplay.classList.add('warning-active');
                     difficultyTimer = 3.0;
-                    soundSystem.playWarning(); // Reuse warning sound for now
+                    soundSystem.playWarning();
                 }
 
                 if (difficultyTimer > 0) {
@@ -1221,6 +1393,11 @@
                     if (difficultyTimer <= 0) {
                         difficultyDisplay.classList.remove('warning-active');
                     }
+                }
+
+                // Near miss timer
+                if (nearMissTimer > 0) {
+                    nearMissTimer -= dt;
                 }
 
                 // Warning Timer Update
@@ -1236,23 +1413,21 @@
                 fxSystem.update(dt, terrain);
 
                 // Collision Logic
-                if (crashed || terrain.checkCollision(bat)) {
+                if (!deathSlowMo && (crashed || terrain.checkCollision(bat))) {
                     // SAFETY NET: First 50m, if you hit floor, bounce up instead of die
-                    const isFloorHit = bat.y > canvas.height / 2; // Rough guess, good enough for safety
+                    const isFloorHit = bat.y > canvas.height / 2;
 
                     if (score < 50 && isFloorHit) {
                         // Activate Safety Net
-                        bat.velocity = -350; // Bounce
-                        bat.y = Math.min(bat.y, canvas.height - 60); // Push out of floor
+                        bat.velocity = -350;
+                        bat.y = Math.min(bat.y, canvas.height - 60);
 
-                        // Trigger Warning UI
                         if (warningTimer <= 0) {
                              soundSystem.playWarning();
                              warningDisplay.classList.add('warning-active');
-                             warningTimer = 1.0; // Show for 1 second
+                             warningTimer = 1.0;
                         }
 
-                        // Visual FX
                         fxSystem.addParticles(bat.x, bat.y + 10, 5);
                     } else {
                         gameOver();
@@ -1267,7 +1442,7 @@
             terrain.drawMask(ctx); // Solid black rocks
             terrain.draw(ctx); // Grey outlines
 
-            if (gameState !== 'GAMEOVER') {
+            if (gameState !== 'GAMEOVER' || deathSlowMo) {
                 bat.draw(ctx);
             }
 
