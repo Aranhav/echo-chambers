@@ -453,6 +453,12 @@
                 this.terrainState = 'STABLE'; // STABLE, UP, DOWN, VOLATILE
                 this.stateTimer = 0;
 
+                // Organic wave for natural cave feel
+                this.waveOffset = 0;
+                this.waveFreq1 = 0.02 + Math.random() * 0.01;
+                this.waveFreq2 = 0.035 + Math.random() * 0.015;
+                this.waveFreq3 = 0.008 + Math.random() * 0.005;
+
                 this.fill();
             }
 
@@ -468,6 +474,12 @@
                 this.terrainState = 'STABLE';
                 this.stateTimer = 0;
 
+                // Reset waves with new random frequencies
+                this.waveOffset = 0;
+                this.waveFreq1 = 0.02 + Math.random() * 0.01;
+                this.waveFreq2 = 0.035 + Math.random() * 0.015;
+                this.waveFreq3 = 0.008 + Math.random() * 0.005;
+
                 this.fill();
             }
 
@@ -480,10 +492,13 @@
             }
 
             addSegment(x) {
+                // Increment wave offset for organic movement
+                this.waveOffset++;
+
                 // Safe Zone Logic (Start of game)
                 let difficultyScale = 0;
-                const safeZoneEnd = canvas.width * 0.4;
-                const rampUpZone = canvas.width * 0.8;
+                const safeZoneEnd = canvas.width * 0.3;
+                const rampUpZone = canvas.width * 0.6;
 
                 if (x > safeZoneEnd) {
                     difficultyScale = (x - safeZoneEnd) / (rampUpZone - safeZoneEnd);
@@ -511,80 +526,106 @@
                     // Add random variation to gap
                     currentGap += (Math.random() * 30 - 15);
                 } else {
-                    currentGap = 320; // Wide at start
+                    currentGap = 300; // Slightly narrower at start for more interest
                 }
 
+                // --- ORGANIC WAVE MOVEMENT (Always active for natural feel) ---
+                // Multiple sine waves create natural, unpredictable cave paths
+                const wave1 = Math.sin(this.waveOffset * this.waveFreq1) * 80;  // Slow big wave
+                const wave2 = Math.sin(this.waveOffset * this.waveFreq2) * 40;  // Medium wave
+                const wave3 = Math.sin(this.waveOffset * this.waveFreq3) * 120; // Very slow drift
+
+                // Base organic movement - always present
+                let organicOffset = (wave1 + wave2 + wave3) * (0.3 + difficultyScale * 0.7);
+
                 // --- TERRAIN STATE MACHINE (The "Brain" of the cave) ---
-                // Only apply random states if we are past the safe zone
-                if (difficultyScale >= 0.5) {
+                // States add extra challenge on top of organic movement
+                if (difficultyScale >= 0.3) {
                     if (this.stateTimer <= 0) {
                         // Pick a new state
                         const rand = Math.random();
 
-                        if (rand < 0.30) {
+                        if (rand < 0.25) {
                             this.terrainState = 'STABLE';
-                            this.stateTimer = Math.floor(Math.random() * 30 + 20); // Lasts 20-50 segments
-                            this.slope = (Math.random() - 0.5) * 1; // Very slight drift
+                            this.stateTimer = Math.floor(Math.random() * 25 + 15);
+                            this.slope = (Math.random() - 0.5) * 1.5;
                         }
-                        else if (rand < 0.55) {
+                        else if (rand < 0.50) {
                             this.terrainState = 'UP';
-                            this.stateTimer = Math.floor(Math.random() * 25 + 15);
-                            this.slope = -(Math.random() * 3 + 2); // Sharp Up
+                            this.stateTimer = Math.floor(Math.random() * 20 + 12);
+                            this.slope = -(Math.random() * 3.5 + 2);
                         }
-                        else if (rand < 0.80) {
+                        else if (rand < 0.75) {
                             this.terrainState = 'DOWN';
-                            this.stateTimer = Math.floor(Math.random() * 25 + 15);
-                            this.slope = (Math.random() * 3 + 2); // Sharp Down
+                            this.stateTimer = Math.floor(Math.random() * 20 + 12);
+                            this.slope = (Math.random() * 3.5 + 2);
                         }
                         else {
                             this.terrainState = 'VOLATILE';
-                            this.stateTimer = Math.floor(Math.random() * 15 + 10); // Short bursts of chaos
+                            this.stateTimer = Math.floor(Math.random() * 12 + 8);
                             this.slope = 0;
                         }
                     }
                     this.stateTimer--;
                 } else {
-                    // Force stable at start
-                    this.terrainState = 'STABLE';
-                    this.slope = 0;
-                    this.centerY = canvas.height / 2;
+                    // Gentle states at start - still some movement!
+                    if (this.stateTimer <= 0) {
+                        const rand = Math.random();
+                        if (rand < 0.5) {
+                            this.terrainState = 'STABLE';
+                            this.slope = (Math.random() - 0.5) * 0.8;
+                        } else if (rand < 0.75) {
+                            this.terrainState = 'UP';
+                            this.slope = -(Math.random() * 1.5 + 0.5);
+                        } else {
+                            this.terrainState = 'DOWN';
+                            this.slope = (Math.random() * 1.5 + 0.5);
+                        }
+                        this.stateTimer = Math.floor(Math.random() * 30 + 20);
+                    }
+                    this.stateTimer--;
                 }
 
                 // --- APPLY STATE TO CENTER Y ---
                 if (this.terrainState === 'VOLATILE') {
-                    // Jitter wildly
-                    this.centerY += (Math.random() - 0.5) * 25;
+                    this.centerY += (Math.random() - 0.5) * 30;
                 } else {
-                    // Smooth movement based on slope
                     this.centerY += this.slope;
                 }
+
+                // Apply organic wave on top of state-based movement
+                let finalCenterY = this.centerY + organicOffset;
 
                 // --- BOUNDARY CHECKS (Keep cave on screen) ---
                 const padding = currentGap / 2 + 60;
 
-                if (this.centerY < padding) {
-                    this.centerY = padding;
-                    this.terrainState = 'DOWN'; // Force bounce down
+                if (finalCenterY < padding) {
+                    this.centerY = padding - organicOffset;
+                    finalCenterY = padding;
+                    this.terrainState = 'DOWN';
                     this.slope = 2;
                     this.stateTimer = 20;
                 }
-                if (this.centerY > canvas.height - padding) {
-                    this.centerY = canvas.height - padding;
-                    this.terrainState = 'UP'; // Force bounce up
+                if (finalCenterY > canvas.height - padding) {
+                    this.centerY = (canvas.height - padding) - organicOffset;
+                    finalCenterY = canvas.height - padding;
+                    this.terrainState = 'UP';
                     this.slope = -2;
                     this.stateTimer = 20;
                 }
 
                 // --- GENERATE TOP AND BOTTOM POINTS ---
-                // Jaggedness increases in Volatile state
+                // Base roughness even at start for texture
+                let baseRoughness = 15;
                 let jaggedMult = 1.0;
                 if (this.terrainState === 'VOLATILE') jaggedMult = 2.0;
 
-                const jaggedTop = Math.random() * currentRoughness * difficultyScale * jaggedMult;
-                const jaggedBot = Math.random() * currentRoughness * difficultyScale * jaggedMult;
+                const totalRoughness = baseRoughness + (currentRoughness * difficultyScale * jaggedMult);
+                const jaggedTop = (Math.random() - 0.3) * totalRoughness;
+                const jaggedBot = (Math.random() - 0.3) * totalRoughness;
 
-                const topY = this.centerY - (currentGap / 2) - jaggedTop;
-                const botY = this.centerY + (currentGap / 2) + jaggedBot;
+                const topY = finalCenterY - (currentGap / 2) + jaggedTop;
+                const botY = finalCenterY + (currentGap / 2) + jaggedBot;
 
                 this.segments.push({
                     x: x,
