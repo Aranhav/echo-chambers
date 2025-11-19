@@ -264,6 +264,106 @@
             }
         }
 
+        /* Leaderboard Styles */
+        .leaderboard {
+            margin-top: 1rem;
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .leaderboard-title {
+            font-size: clamp(0.8rem, 3vw, 1rem);
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 0.5rem;
+        }
+
+        .leaderboard-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            font-size: clamp(0.7rem, 2.5vw, 0.85rem);
+        }
+
+        .leaderboard-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.3rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .leaderboard-list li.current-player {
+            color: #4f4;
+        }
+
+        .leaderboard-rank {
+            width: 25px;
+            text-align: left;
+            color: #666;
+        }
+
+        .leaderboard-name {
+            flex: 1;
+            text-align: left;
+            padding: 0 0.5rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .leaderboard-score {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Name Input Modal */
+        .name-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .name-modal-content {
+            background: rgba(10, 10, 10, 0.95);
+            padding: clamp(1.5rem, 5vw, 2.5rem);
+            border: 2px solid #fff;
+            text-align: center;
+            max-width: 90vw;
+        }
+
+        .name-input {
+            background: #000;
+            border: 1px solid #fff;
+            color: #fff;
+            padding: 12px 16px;
+            font-size: 1rem;
+            font-family: inherit;
+            width: 100%;
+            max-width: 200px;
+            text-align: center;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .name-input:focus {
+            outline: none;
+            border-color: #4f4;
+        }
+
+        .name-input::placeholder {
+            color: #444;
+        }
+
         /* Visual FX */
         .scanlines {
             position: fixed;
@@ -332,8 +432,25 @@
         <div id="gameOverScreen" class="game-over-screen hidden">
             <h1 style="color: #fff;">SIGNAL LOST</h1>
             <p id="finalScore">Depth Reached: 0m</p>
+            <div class="leaderboard">
+                <div class="leaderboard-title">Top Explorers</div>
+                <ul class="leaderboard-list" id="leaderboardList">
+                    <li><span class="leaderboard-rank">-</span><span class="leaderboard-name">Loading...</span><span class="leaderboard-score">-</span></li>
+                </ul>
+            </div>
             <button class="btn" id="restartBtn">Reboot System</button>
             <div class="tap-hint">Tap or Space to Fly</div>
+        </div>
+
+        <!-- Name Input Modal -->
+        <div id="nameModal" class="name-modal hidden">
+            <div class="name-modal-content">
+                <h1 style="font-size: clamp(1.2rem, 5vw, 1.8rem);">Enter Your Name</h1>
+                <p style="margin-bottom: 1rem;">For the leaderboard</p>
+                <input type="text" id="playerNameInput" class="name-input" placeholder="NAME" maxlength="15" autocomplete="off">
+                <br>
+                <button class="btn" id="submitNameBtn">Confirm</button>
+            </div>
         </div>
 
         <div class="branding">
@@ -386,6 +503,63 @@
         let speedPhase = 0; // For speed variation
         let comboStreak = 0; // Near-wall flying streak
         let lastProximity = 0;
+
+        // Leaderboard state
+        let playerName = localStorage.getItem('echoChambersName') || '';
+        let playerId = localStorage.getItem('echoChambersPlayerId') || '';
+        let pendingScore = 0;
+
+        // Generate player ID if not exists
+        if (!playerId) {
+            playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('echoChambersPlayerId', playerId);
+        }
+
+        // Leaderboard API functions
+        async function fetchLeaderboard() {
+            try {
+                const response = await fetch('/api/scores');
+                if (response.ok) {
+                    return await response.json();
+                }
+            } catch (error) {
+                console.error('Failed to fetch leaderboard:', error);
+            }
+            return [];
+        }
+
+        async function submitScore(name, score) {
+            try {
+                const response = await fetch('/api/scores', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, score, playerId })
+                });
+                if (response.ok) {
+                    return await response.json();
+                }
+            } catch (error) {
+                console.error('Failed to submit score:', error);
+            }
+            return null;
+        }
+
+        function renderLeaderboard(scores, currentScore) {
+            const list = document.getElementById('leaderboardList');
+            if (scores.length === 0) {
+                list.innerHTML = '<li><span class="leaderboard-rank">-</span><span class="leaderboard-name">No scores yet</span><span class="leaderboard-score">-</span></li>';
+                return;
+            }
+
+            list.innerHTML = scores.map((entry, index) => {
+                const isCurrentPlayer = entry.playerId === playerId && entry.score === currentScore;
+                return `<li class="${isCurrentPlayer ? 'current-player' : ''}">
+                    <span class="leaderboard-rank">${index + 1}.</span>
+                    <span class="leaderboard-name">${entry.name}</span>
+                    <span class="leaderboard-score">${entry.score}m</span>
+                </li>`;
+            }).join('');
+        }
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -1152,7 +1326,7 @@
             fxSystem.addEcho(bat.x, bat.y);
         }
 
-        function gameOver() {
+        async function gameOver() {
             // Save personal best
             const finalScore = Math.floor(score);
             if (finalScore > personalBest) {
@@ -1174,11 +1348,6 @@
                 finalScoreDisplay.innerHTML = `Depth: ${finalScore}m<br><span style="color: #888; font-size: 0.7em;">Best: ${personalBest}m</span>`;
             }
 
-            // Delay showing game over screen for slow-mo effect
-            setTimeout(() => {
-                gameOverScreen.classList.remove('hidden');
-            }, 400);
-
             warningDisplay.classList.remove('warning-active');
 
             const intensity = 15;
@@ -1186,7 +1355,52 @@
             setTimeout(() => { canvas.style.transform = 'none'; }, 100);
 
             fxSystem.addParticles(bat.x, bat.y, 50);
+
+            // Handle leaderboard submission
+            pendingScore = finalScore;
+
+            // Delay for slow-mo effect
+            setTimeout(async () => {
+                if (!playerName) {
+                    // Show name modal for first-time players
+                    document.getElementById('nameModal').classList.remove('hidden');
+                    document.getElementById('playerNameInput').focus();
+                } else {
+                    // Submit score immediately for returning players
+                    await submitScore(playerName, finalScore);
+                    const scores = await fetchLeaderboard();
+                    renderLeaderboard(scores, finalScore);
+                    gameOverScreen.classList.remove('hidden');
+                }
+            }, 400);
         }
+
+        // Name modal handling
+        const nameModal = document.getElementById('nameModal');
+        const playerNameInput = document.getElementById('playerNameInput');
+        const submitNameBtn = document.getElementById('submitNameBtn');
+
+        async function handleNameSubmit() {
+            const name = playerNameInput.value.trim().toUpperCase();
+            if (name.length > 0) {
+                playerName = name;
+                localStorage.setItem('echoChambersName', playerName);
+                nameModal.classList.add('hidden');
+
+                // Submit score and show leaderboard
+                await submitScore(playerName, pendingScore);
+                const scores = await fetchLeaderboard();
+                renderLeaderboard(scores, pendingScore);
+                gameOverScreen.classList.remove('hidden');
+            }
+        }
+
+        submitNameBtn.addEventListener('click', handleNameSubmit);
+        playerNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                handleNameSubmit();
+            }
+        });
 
         function handleInput() {
             soundSystem.init();
