@@ -490,25 +490,28 @@
                     difficultyScale = Math.min(1, difficultyScale);
                 }
 
-                // --- DIFFICULTY STAGE SETTINGS ---
-                let currentGap = 300;
-                let currentRoughness = 40;
+                // --- DIFFICULTY STAGE SETTINGS (INCREASED) ---
+                let currentGap = 280;
+                let currentRoughness = 60;
 
                 if (difficultyScale >= 1) {
-                    if (score < 500) {
-                        currentGap = 280;
-                        currentRoughness = 50;
-                    } else if (score < 1000) {
+                    if (score < 300) {
                         currentGap = 240;
                         currentRoughness = 70;
-                    } else {
+                    } else if (score < 600) {
                         currentGap = 200;
                         currentRoughness = 90;
+                    } else if (score < 1000) {
+                        currentGap = 170;
+                        currentRoughness = 110;
+                    } else {
+                        currentGap = 140;
+                        currentRoughness = 130;
                     }
                     // Add random variation to gap
-                    currentGap += (Math.random() * 40 - 20);
+                    currentGap += (Math.random() * 30 - 15);
                 } else {
-                    currentGap = 350; // Wide at start
+                    currentGap = 320; // Wide at start
                 }
 
                 // --- TERRAIN STATE MACHINE (The "Brain" of the cave) ---
@@ -604,13 +607,13 @@
                     this.addSegment(lastSeg.x + this.segmentWidth);
                 }
 
-                // Speed Increase based on Distance
-                // Cap speed at 800
-                let targetSpeed = 250 + (score / 10);
-                if (targetSpeed > 800) targetSpeed = 800;
+                // Speed Increase based on Distance (FASTER)
+                // Cap speed at 900
+                let targetSpeed = 280 + (score / 6);
+                if (targetSpeed > 900) targetSpeed = 900;
 
                 // Smooth acceleration
-                gameSpeed += (targetSpeed - gameSpeed) * dt;
+                gameSpeed += (targetSpeed - gameSpeed) * dt * 1.5;
             }
 
             checkCollision(bat) {
@@ -627,50 +630,98 @@
                 return false;
             }
 
-            // Draw the visual outline of the cave
+            // Draw the visual outline of the cave with smooth curves
             draw(ctx) {
                 ctx.strokeStyle = '#444'; // Lighter grey for better visibility
                 ctx.lineWidth = 2;
 
+                if (this.segments.length < 2) return;
+
+                // Draw smooth top outline using quadratic curves
                 ctx.beginPath();
-                ctx.moveTo(this.segments[0].x, 0);
-                for (let s of this.segments) {
-                    ctx.lineTo(s.x, s.top);
-                    ctx.lineTo(s.x + s.w, s.top);
+                let firstX = this.segments[0].x + this.segments[0].w / 2;
+                let firstTopY = this.segments[0].top;
+                ctx.moveTo(this.segments[0].x - 50, firstTopY);
+                ctx.lineTo(firstX, firstTopY);
+
+                for (let i = 0; i < this.segments.length - 1; i++) {
+                    const curr = this.segments[i];
+                    const next = this.segments[i + 1];
+                    const currMidX = curr.x + curr.w / 2;
+                    const nextMidX = next.x + next.w / 2;
+                    const cpX = (currMidX + nextMidX) / 2;
+                    ctx.quadraticCurveTo(currMidX, curr.top, cpX, (curr.top + next.top) / 2);
                 }
+                // Final segment
+                const last = this.segments[this.segments.length - 1];
+                ctx.lineTo(last.x + last.w + 50, last.top);
                 ctx.stroke();
 
+                // Draw smooth bottom outline
                 ctx.beginPath();
-                ctx.moveTo(this.segments[0].x, canvas.height);
-                for (let s of this.segments) {
-                    ctx.lineTo(s.x, s.bot);
-                    ctx.lineTo(s.x + s.w, s.bot);
+                let firstBotY = this.segments[0].bot;
+                ctx.moveTo(this.segments[0].x - 50, firstBotY);
+                ctx.lineTo(firstX, firstBotY);
+
+                for (let i = 0; i < this.segments.length - 1; i++) {
+                    const curr = this.segments[i];
+                    const next = this.segments[i + 1];
+                    const currMidX = curr.x + curr.w / 2;
+                    const nextMidX = next.x + next.w / 2;
+                    const cpX = (currMidX + nextMidX) / 2;
+                    ctx.quadraticCurveTo(currMidX, curr.bot, cpX, (curr.bot + next.bot) / 2);
                 }
+                ctx.lineTo(last.x + last.w + 50, last.bot);
                 ctx.stroke();
             }
 
-            // Draw the solid rock that covers everything
+            // Draw the solid rock that covers everything with smooth curves
             drawMask(ctx) {
                 ctx.fillStyle = '#000000'; // Pure Black Rocks
 
-                // Ceiling
+                if (this.segments.length < 2) return;
+
+                // Ceiling with smooth curve
                 ctx.beginPath();
-                ctx.moveTo(this.segments[0].x - 10, -50);
-                for (let s of this.segments) {
-                    ctx.lineTo(s.x, s.top);
-                    ctx.lineTo(s.x + s.w, s.top);
+                ctx.moveTo(this.segments[0].x - 50, -50);
+
+                let firstX = this.segments[0].x + this.segments[0].w / 2;
+                ctx.lineTo(this.segments[0].x - 50, this.segments[0].top);
+                ctx.lineTo(firstX, this.segments[0].top);
+
+                for (let i = 0; i < this.segments.length - 1; i++) {
+                    const curr = this.segments[i];
+                    const next = this.segments[i + 1];
+                    const currMidX = curr.x + curr.w / 2;
+                    const nextMidX = next.x + next.w / 2;
+                    const cpX = (currMidX + nextMidX) / 2;
+                    ctx.quadraticCurveTo(currMidX, curr.top, cpX, (curr.top + next.top) / 2);
                 }
-                ctx.lineTo(this.segments[this.segments.length-1].x + 50, -50);
+
+                const last = this.segments[this.segments.length - 1];
+                ctx.lineTo(last.x + last.w + 50, last.top);
+                ctx.lineTo(last.x + last.w + 50, -50);
+                ctx.closePath();
                 ctx.fill();
 
-                // Floor
+                // Floor with smooth curve
                 ctx.beginPath();
-                ctx.moveTo(this.segments[0].x - 10, canvas.height + 50);
-                for (let s of this.segments) {
-                    ctx.lineTo(s.x, s.bot);
-                    ctx.lineTo(s.x + s.w, s.bot);
+                ctx.moveTo(this.segments[0].x - 50, canvas.height + 50);
+                ctx.lineTo(this.segments[0].x - 50, this.segments[0].bot);
+                ctx.lineTo(firstX, this.segments[0].bot);
+
+                for (let i = 0; i < this.segments.length - 1; i++) {
+                    const curr = this.segments[i];
+                    const next = this.segments[i + 1];
+                    const currMidX = curr.x + curr.w / 2;
+                    const nextMidX = next.x + next.w / 2;
+                    const cpX = (currMidX + nextMidX) / 2;
+                    ctx.quadraticCurveTo(currMidX, curr.bot, cpX, (curr.bot + next.bot) / 2);
                 }
-                ctx.lineTo(this.segments[this.segments.length-1].x + 50, canvas.height + 50);
+
+                ctx.lineTo(last.x + last.w + 50, last.bot);
+                ctx.lineTo(last.x + last.w + 50, canvas.height + 50);
+                ctx.closePath();
                 ctx.fill();
             }
 
